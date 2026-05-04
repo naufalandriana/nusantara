@@ -1,66 +1,133 @@
 "use client";
 
-import { useState } from "react";
-import { auth } from "@/app/lib/firebase"; // Pastikan path ini benar
+import { useState, useEffect } from "react";
+import { auth } from "@/app/lib/firebase";
 import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   GoogleAuthProvider,
-  signInWithPopup, // Pakai ini untuk login Google yang lebih simpel
+  signInWithPopup,
+  onAuthStateChanged,
 } from "firebase/auth";
 import { useRouter } from "next/navigation";
+import { createSupabaseBrowser } from "@/app/lib/supabase/client";
 import "./../auth.css";
 
 export default function LoginPage() {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [loadingSubmit, setLoadingSubmit] = useState(false);
+  const [checkingAuth, setCheckingAuth] = useState(true);
   const router = useRouter();
 
-  // Provider untuk Google
+  const supabase = createSupabaseBrowser();
   const googleProvider = new GoogleAuthProvider();
 
-  // FUNGSI DAFTAR & LOGIN FIREBASE (Email/Password)
+  // ROUTE GUARD: kalau udah login, langsung redirect ke beranda
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      if (currentUser) {
+        router.replace("/");
+      } else {
+        setCheckingAuth(false);
+      }
+    });
+    return () => unsubscribe();
+  }, [router]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setLoadingSubmit(true);
+
     try {
+      let user;
+
       if (isLogin) {
-        await signInWithEmailAndPassword(auth, email, password);
-        alert("Login Berhasil! Selamat datang kembali.");
+        const res = await signInWithEmailAndPassword(auth, email, password);
+        user = res.user;
       } else {
-        await createUserWithEmailAndPassword(auth, email, password);
+        const res = await createUserWithEmailAndPassword(auth, email, password);
+        user = res.user;
+      }
+
+      const { error: dbError } = await supabase.from("customers").upsert({
+        id: user.uid,
+        email: user.email,
+        updated_at: new Date(),
+      });
+
+      if (dbError) throw dbError;
+
+      // ✅ Simpan UID & info user ke localStorage
+      localStorage.setItem("userId", user.uid);
+      localStorage.setItem("userEmail", user.email || "");
+      localStorage.setItem("userName", user.displayName || user.email || "");
+      localStorage.setItem("isLoggedIn", "true");
+
+      if (!isLogin) {
         alert("Akun NusantaraAssets berhasil dibuat! Silakan masuk.");
         setIsLogin(true);
+        setLoadingSubmit(false);
         return;
       }
+
       router.push("/");
     } catch (error: any) {
       alert("Waduh, ada masalah: " + error.message);
+    } finally {
+      setLoadingSubmit(false);
     }
   };
 
-  // FUNGSI LOGIN GOOGLE (Murni Firebase SDK)
   const handleGoogleLogin = async () => {
+    setLoadingSubmit(true);
     try {
-      // Ini akan membuka popup Google tanpa perlu script eksternal di useEffect
       const result = await signInWithPopup(auth, googleProvider);
+      const user = result.user;
 
-      // Info user untuk Navbar atau kebutuhan lainnya
+      const { error: dbError } = await supabase.from("customers").upsert({
+        id: user.uid,
+        email: user.email,
+        full_name: user.displayName,
+        avatar_url: user.photoURL,
+        updated_at: new Date(),
+      });
+
+      if (dbError) throw dbError;
+
+      // ✅ Simpan UID & info user ke localStorage
+      localStorage.setItem("userId", user.uid);
+      localStorage.setItem("userEmail", user.email || "");
+      localStorage.setItem("userName", user.displayName || user.email || "");
+      localStorage.setItem("userPic", user.photoURL || "");
       localStorage.setItem("isLoggedIn", "true");
-      localStorage.setItem("userName", result.user.displayName || "User");
-      localStorage.setItem("userPic", result.user.photoURL || "");
 
-      localStorage.setItem("userEmail", result.user.email || "");
-
-      localStorage.setItem("userPic", result.user.photoURL || "");
-
-      alert(`Login Google Berhasil! Halo, ${result.user.displayName}`);
-      router.push("/"); // Gunakan router.push agar lebih smooth
+      router.push("/");
     } catch (error: any) {
-      // Error origin_mismatch biasanya tidak muncul lagi di sini kalau localhost sudah di-whitelist di Firebase
       alert("Google Login Gagal: " + error.message);
+    } finally {
+      setLoadingSubmit(false);
     }
   };
+
+  if (checkingAuth) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "#0d111a",
+          color: "#94a3b8",
+          fontSize: "14px",
+        }}
+      >
+        Memuat...
+      </div>
+    );
+  }
 
   return (
     <div className="login-page">
@@ -98,15 +165,18 @@ export default function LoginPage() {
           <button
             type="submit"
             className="btn-utama"
+            disabled={loadingSubmit}
             style={{
               width: "100%",
               marginBottom: "15px",
               borderRadius: "50px",
               padding: "15px",
               fontWeight: "bold",
+              opacity: loadingSubmit ? 0.7 : 1,
+              cursor: loadingSubmit ? "not-allowed" : "pointer",
             }}
           >
-            {isLogin ? "Masuk" : "Daftar Sekarang"}
+            {loadingSubmit ? "Memproses..." : isLogin ? "Masuk" : "Daftar Sekarang"}
           </button>
         </form>
 
@@ -133,10 +203,10 @@ export default function LoginPage() {
           </span>
         </div>
 
-        {/* Tombol Google Custom yang simpel */}
         <button
           onClick={handleGoogleLogin}
           className="btn-google"
+          disabled={loadingSubmit}
           style={{
             width: "100%",
             padding: "12px",
@@ -148,8 +218,9 @@ export default function LoginPage() {
             backgroundColor: "white",
             color: "#333",
             border: "none",
-            cursor: "pointer",
+            cursor: loadingSubmit ? "not-allowed" : "pointer",
             fontWeight: "500",
+            opacity: loadingSubmit ? 0.7 : 1,
           }}
         >
           <img

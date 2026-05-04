@@ -2,51 +2,112 @@
 
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
-import { auth } from "@/app/lib/firebase"; //
-import { onAuthStateChanged } from "firebase/auth"; //
+import { auth } from "@/app/lib/firebase";
+import { onAuthStateChanged } from "firebase/auth";
 
 function DetailContent() {
   const searchParams = useSearchParams();
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // Pantau status login secara real-time dari Firebase agar sinkron dengan Navbar
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        setIsLoggedIn(true);
-      } else {
-        setIsLoggedIn(false);
-      }
+      setIsLoggedIn(!!user);
     });
     return () => unsubscribe();
   }, []);
 
-  // Ambil data dari URL (logika muatDataProduk)
+  // ✅ Tambah id dari searchParams
+  const id = searchParams.get("id") || "";
   const nama = searchParams.get("nama") || "Aset Nusantara";
   const harga = searchParams.get("harga") || "Rp 70k";
   const desc =
     searchParams.get("desc") ||
     "Aset berkualitas tinggi dari kebudayaan Nusantara.";
 
+  const isTrial = searchParams.get("isTrial") === "true";
+  const fileUrl = searchParams.get("fileUrl") || "";
+
   return (
     <main
       style={{ backgroundColor: "#0f172a", minHeight: "100vh", color: "white" }}
     >
-      <nav id="navbar">
-        <div className="logo-wrapper">
-          <div className="logo">
-            Nusantara<span>Assets</span>
+      {/* ===== NAVBAR FIXED + MOBILE MENU DROPDOWN ===== */}
+      <div
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 1000,
+        }}
+      >
+        <nav id="navbar" className="navbar">
+          <div
+            className="logo-wrapper"
+            style={{ display: "flex", alignItems: "center", gap: "10px" }}
+          >
+            <img
+              src="/img/logo.png"
+              alt="Logo N"
+              style={{ height: "40px", width: "auto", objectFit: "contain" }}
+            />
+            <div
+              className="logo"
+              style={{ fontSize: "1.5rem", fontWeight: "bold" }}
+            >
+              Nusantara<span style={{ color: "#ffd700" }}>Assets</span>
+            </div>
           </div>
-        </div>
-        <div className="nav-menu">
-          <ul>
-            <li>
-              <a href="/katalog">Kembali ke Katalog</a>
-            </li>
-          </ul>
-        </div>
-      </nav>
 
+          <div className="nav-menu desktop-menu">
+            <ul>
+              <li style={{ listStyle: "none" }}>
+                <a
+                  href="/katalog"
+                  style={{
+                    color: "white",
+                    textDecoration: "none",
+                    fontWeight: "bold",
+                  }}
+                >
+                  Kembali ke Katalog
+                </a>
+              </li>
+            </ul>
+          </div>
+
+          <div
+            className="hamburger"
+            onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+          >
+            <span className={`bar ${isMobileMenuOpen ? "open" : ""}`}></span>
+            <span className={`bar ${isMobileMenuOpen ? "open" : ""}`}></span>
+            <span className={`bar ${isMobileMenuOpen ? "open" : ""}`}></span>
+          </div>
+        </nav>
+
+        {isMobileMenuOpen && (
+          <div className="mobile-menu">
+            <ul>
+              <li style={{ listStyle: "none" }}>
+                <a
+                  href="/katalog"
+                  style={{
+                    color: "white",
+                    textDecoration: "none",
+                    fontWeight: "bold",
+                  }}
+                >
+                  Kembali ke Katalog
+                </a>
+              </li>
+            </ul>
+          </div>
+        )}
+      </div>
+
+      {/* Konten Detail (padding-top cukup agar tidak tertutup navbar) */}
       <div
         className="detail-wrapper"
         style={{
@@ -56,6 +117,7 @@ function DetailContent() {
           textAlign: "center",
         }}
       >
+        {/* ... sisa konten tidak berubah ... */}
         <div
           style={{
             width: "100%",
@@ -104,7 +166,49 @@ function DetailContent() {
           {desc}
         </p>
 
-        <div style={{ display: "flex", gap: "20px", justifyContent: "center" }}>
+        <div
+          style={{
+            display: "flex",
+            gap: "20px",
+            justifyContent: "center",
+            flexWrap: "wrap",
+          }}
+        >
+          {isTrial && (
+            <button
+              className="btn-trial"
+              style={{
+                padding: "15px 40px",
+                background: "#10b981",
+                color: "white",
+                borderRadius: "15px",
+                fontWeight: "bold",
+                border: "none",
+                cursor: "pointer",
+                boxShadow: "0 4px 6px rgba(16, 185, 129, 0.3)",
+                transition: "all 0.3s ease",
+              }}
+              onClick={() => {
+                if (!isLoggedIn) {
+                  alert(
+                    "Ups! Kamu harus login dulu untuk klaim free trial 2D pixel art ini.",
+                  );
+                  window.location.href = "/login";
+                  return;
+                }
+
+                if (fileUrl) {
+                  alert("Yay! File 2D pixel art sedang diunduh! 🎁");
+                  window.open(fileUrl, "_blank");
+                } else {
+                  alert("Maaf, file trial untuk aset ini belum tersedia.");
+                }
+              }}
+            >
+              🎁 Try for Free
+            </button>
+          )}
+
           <button
             className="btn-cart"
             style={{
@@ -115,6 +219,7 @@ function DetailContent() {
               borderRadius: "15px",
               fontWeight: "bold",
               cursor: "pointer",
+              transition: "all 0.3s ease",
             }}
             onClick={() => {
               const keranjang = JSON.parse(
@@ -139,24 +244,116 @@ function DetailContent() {
               fontWeight: "bold",
               border: "none",
               cursor: "pointer",
+              transition: "all 0.3s ease",
             }}
             onClick={() => {
-              // 1. Cek status login
               if (!isLoggedIn) {
                 alert("Ups! Kamu harus login dulu sebelum membeli.");
                 window.location.href = "/login";
                 return;
               }
 
-              // 2. Jika sudah login, kirim data nama dan harga ke URL pembayaran
-              // Menggunakan encodeURIComponent agar karakter seperti spasi atau simbol tetap aman di URL
-              window.location.href = `/pembayaran?nama=${encodeURIComponent(nama)}&harga=${encodeURIComponent(harga)}`;
+              // ✅ Sekarang id ikut dikirim ke halaman pembayaran
+              window.location.href = `/pembayaran?id=${encodeURIComponent(id)}&nama=${encodeURIComponent(nama)}&harga=${encodeURIComponent(harga)}`;
             }}
           >
             Beli Sekarang
           </button>
         </div>
       </div>
+
+      <style jsx>{`
+        /* ============ NAVBAR FIXED ============ */
+        .navbar {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          padding: 16px 5%;
+          background: rgba(15, 23, 42, 0.9);
+          backdrop-filter: blur(10px);
+          -webkit-backdrop-filter: blur(10px);
+          border-bottom: 1px solid rgba(255, 215, 0, 0.15);
+        }
+
+        /* Hamburger */
+        .hamburger {
+          display: none;
+          flex-direction: column;
+          gap: 5px;
+          cursor: pointer;
+          z-index: 50;
+        }
+
+        .hamburger .bar {
+          width: 25px;
+          height: 3px;
+          background-color: white;
+          transition: all 0.3s ease;
+          border-radius: 5px;
+        }
+
+        .hamburger .bar.open:nth-child(1) {
+          transform: translateY(8px) rotate(45deg);
+        }
+        .hamburger .bar.open:nth-child(2) {
+          opacity: 0;
+        }
+        .hamburger .bar.open:nth-child(3) {
+          transform: translateY(-8px) rotate(-45deg);
+        }
+
+        /* Dropdown mobile */
+        .mobile-menu {
+          background: #1e293b;
+          padding: 15px 5%;
+          border-bottom: 1px solid rgba(255, 215, 0, 0.2);
+          animation: slideDown 0.3s ease;
+        }
+        .mobile-menu ul {
+          margin: 0;
+          padding: 0;
+        }
+        .mobile-menu a {
+          display: block;
+          padding: 10px 0;
+        }
+
+        @keyframes slideDown {
+          from {
+            opacity: 0;
+            transform: translateY(-10px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        /* Tombol hover glow */
+        .btn-trial:hover {
+          box-shadow: 0 0 15px #10b981, 0 0 30px #10b981 !important;
+          transform: translateY(-3px);
+        }
+        .btn-cart:hover {
+          background: #ffd700 !important;
+          color: #0f172a !important;
+          box-shadow: 0 0 15px #ffd700, 0 0 30px #ffd700 !important;
+          transform: translateY(-3px);
+        }
+        .btn-buy:hover {
+          box-shadow: 0 0 15px #ffd700, 0 0 30px #ffd700 !important;
+          transform: translateY(-3px);
+        }
+
+        @media (max-width: 768px) {
+          .desktop-menu {
+            display: none;
+          }
+          .hamburger {
+            display: flex;
+          }
+        }
+      `}</style>
     </main>
   );
 }

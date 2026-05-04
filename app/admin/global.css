@@ -1,0 +1,326 @@
+/* ==============================================
+   admin.css — scoped styles for /app/admin/*
+   Extends globals.css, does NOT override it
+   ============================================== */
+
+/* ---- ROOT / LAYOUT ---- */
+.admin-root {
+  position: relative;
+  min-height: 100vh;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background-color: var(--navy-deep); /* Sync with globals.css for solid clean background */
+  overflow: hidden;
+  font-family: "Plus Jakarta Sans", sans-serif;
+}
+
+/* ---- CENTRE GLOW (Diredam & Clean) ---- */
+.bg-glow {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 520px;
+  height: 520px;
+  /* Reduced gold glow for a clean look */
+  background: radial-gradient(circle, rgba(255, 215, 0, 0.05) 0%, transparent 65%);
+  border-radius: 50%;
+  pointer-events: none;
+  z-index: 0;
+  animation: pulse-glow-subtle 7s ease-in-out infinite;
+}
+
+@keyframes pulse-glow-subtle {
+  0%, 100% { opacity: 0.5; transform: translate(-50%, -50%) scale(1); }
+  50% { opacity: 1; transform: translate(-50%, -50%) scale(1.05); }
+}
+
+/* ---- GLASS CARD (Cleaned) ---- */
+.glass-card {
+  position: relative;
+  z-index: 10;
+  width: 100%;
+  max-width: 400px;
+  padding: 40px 32px 32px;
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.03); /* Sync with saran-container */
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  /* Subtler border line */
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.03) inset,
+    0 30px 60px rgba(0, 0, 0, 0.5);
+
+  /* Entry animation */
+  animation: card-in-clean 0.6s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes card-in-clean {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Subtler gold top border */
+.glass-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 25%;
+  right: 25%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 215, 0, 0.3), transparent);
+}
+
+/* ---- BRANDING HEADER ---- */
+.brand-header {
+  text-align: center;
+  margin-bottom: 36px;
+}
+
+.brand-icon {
+  width: 55px;
+  height: 55px;
+  margin: 0 auto 16px;
+  border-radius: 16px;
+  /* Matching biolink style for icons */
+  background: rgba(255, 215, 0, 0.06);
+  border: 1px solid rgba(255, 215, 0, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.brand-title {
+  font-size: 24px;
+  font-weight: 800;
+  color: var(--text-main);
+  letter-spacing: -0.5px;
+  margin-bottom: 4px;
+}
+
+.brand-title span {
+  /* Consistent with Logo span in globals.css */
+  color: var(--accent);
+  text-shadow: 0 0 10px var(--accent-glow);
+}
+
+.brand-sub {
+  font-size: 13px;
+  color: var(--text-dim);
+  letter-spacing: 0.5px;
+  font-weight: 500;
+}
+
+.brand-version {
+  color: var(--gold);
+  font-weight: 700;
+}
+
+/* ---- FLOAT ANIMATION (Subtle) ---- */
+.animate-float-clean {
+  animation: float-clean 4s ease-in-out infinite;
+}
+
+@keyframes float-clean {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+/* ---- LOGIN FORM ---- */
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* ---- FIELD WRAPPER ---- */
+.field-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.field-icon {
+  position: absolute;
+  left: 16px;
+  color: #475569; /* Neutral grey */
+  display: flex;
+  align-items: center;
+  pointer-events: none;
+  transition: color 0.3s ease;
+}
+
+/* Icon lights up on focus */
+.field-wrapper:focus-within .field-icon {
+  color: var(--accent);
+}
+
+.toggle-pass {
+  position: absolute;
+  right: 14px;
+  background: none;
+  border: none;
+  color: #475569;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  padding: 4px;
+  border-radius: 6px;
+  transition: color 0.2s ease;
+}
+
+.toggle-pass:hover {
+  color: var(--accent);
+}
+
+/* ---- INPUT (Cleaned & Smoothed) ---- */
+.input-modern {
+  width: 100%;
+  padding: 15px 44px;
+  /* Space for icons */
+  background: rgba(255, 255, 255, 0.04);
+  /* Smoother border radius and color */
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  color: var(--text-main);
+  font-size: 14px;
+  font-family: "Plus Jakarta Sans", sans-serif;
+  outline: none;
+  transition: 0.3s all ease;
+}
+
+.input-modern::placeholder {
+  color: #64748b;
+}
+
+.input-modern:focus {
+  border-color: var(--accent);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 0 12px rgba(255, 215, 0, 0.15);
+}
+
+/* ---- ERROR BOX ---- */
+.error-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(239, 68, 68, 0.08);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  color: #f87171;
+  font-size: 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  animation: shake 0.35s ease;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-6px); }
+  75% { transform: translateX(6px); }
+}
+
+/* ---- SUBMIT BUTTON (Rounded & Aligned with globals.css) ---- */
+.btn-modern {
+  width: 100%;
+  padding: 16px 20px;
+  margin-top: 6px;
+  background: var(--accent);
+  color: #0f172a;
+  border: none;
+  /* Fully rounded button like btn-utama/jelajahi */
+  border-radius: 50px;
+  font-size: 15px;
+  font-weight: 800;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  transition: 0.3s all ease;
+  box-shadow: 0 4px 15px rgba(255, 215, 0, 0.3);
+}
+
+.btn-modern:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 22px rgba(255, 215, 0, 0.4);
+  filter: brightness(1.03);
+}
+
+.btn-modern:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.btn-modern:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  filter: grayscale(0.6);
+}
+
+/* Loading spinner */
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2.5px solid rgba(15, 23, 42, 0.2);
+  border-top-color: #0f172a;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ---- FOOTER ---- */
+.admin-footer {
+  margin-top: 32px;
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-dim);
+  letter-spacing: 1px;
+  font-weight: 500;
+  opacity: 0.7;
+}
+
+/* ---- RESPONSIVE ---- */
+@media (max-width: 480px) {
+  .glass-card {
+    padding: 32px 24px 28px;
+    border-radius: 24px;
+  }
+}
+
+/* Tambahan untuk dashboard layout yang bener */
+.dashboard-layout {
+  display: flex;
+  min-height: 100vh;
+  background: var(--bg-dark);
+}
+
+.dashboard-main {
+  flex: 1;
+  margin-left: var(--sidebar-width, 272px);
+  transition: margin-left 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  min-height: 100vh;
+  overflow-x: auto;
+  background: radial-gradient(circle at 0% 0%, #111827 0%, #0f172a 100%);
+}
+
+/* Kalo sidebar collapsed */
+.dashboard-main.collapsed {
+  margin-left: 80px;
+}
+
+/* Responsive dashboard */
+@media (max-width: 768px) {
+  .dashboard-main {
+    margin-left: 80px !important;
+  }
+  
+  .dashboard-main.expanded-mobile {
+    margin-left: 0 !important;
+  }
+}

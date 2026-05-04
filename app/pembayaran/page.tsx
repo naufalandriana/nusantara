@@ -5,24 +5,33 @@ import Navbar from "@/app/components/Navbar";
 import Swal from "sweetalert2";
 import { useSearchParams } from "next/navigation";
 import emailjs from "@emailjs/browser";
-// --- FIREBASE IMPORT ---
+// --- FIREBASE IMPORT (dipertahankan untuk real-time status cek) ---
 import { db } from "@/app/lib/firebase";
-import {
-  collection,
-  addDoc,
-  serverTimestamp,
-  query,
-  where,
-  onSnapshot,
-} from "firebase/firestore";
+import { collection, query, where, onSnapshot } from "firebase/firestore";
+// --- SUPABASE IMPORT ---
+import { createSupabaseBrowser } from "@/app/lib/supabase/client";
+
+// ✅ Generate Transaction ID format: TRNSKSI-xxxxxxxx
+function generateTransactionId(): string {
+  const chars =
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let random = "";
+  for (let i = 0; i < 8; i++) {
+    random += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return `TRNSKSI-${random}`;
+}
 
 function PaymentContent() {
   const searchParams = useSearchParams();
   const [metode, setMetode] = useState("qris");
   const [totalTagihan, setTotalTagihan] = useState(0);
-  const [isSuccess, setIsSuccess] = useState(false);
 
-  // TAMBAHAN: State untuk menyimpan URL file asli dari database
+  // ✅ Status dipisah jadi isApproved & isRejected
+  const [isApproved, setIsApproved] = useState(false);
+  const [isRejected, setIsRejected] = useState(false);
+
+  // State untuk menyimpan URL file asli dari database
   const [downloadUrl, setDownloadUrl] = useState<string>("");
 
   const [buktiPembayaran, setBuktiPembayaran] = useState<File | null>(null);
@@ -53,20 +62,20 @@ function PaymentContent() {
       setTotalTagihan(totalKeranjang);
     }
 
-    // 2. RADAR REAL-TIME (Cek Status Success)
+    // 2. RADAR REAL-TIME — cek status approved & rejected
     const userEmail = localStorage.getItem("userEmail");
     if (userEmail) {
-      const q = query(
+      // --- Listener: APPROVED ---
+      const qApproved = query(
         collection(db, "transactions"),
         where("email_pembeli", "==", userEmail),
-        where("status", "==", "success"),
+        where("status", "==", "approved"),
       );
 
-      const unsubscribe = onSnapshot(q, (snapshot) => {
+      const unsubscribeApproved = onSnapshot(qApproved, (snapshot) => {
         if (!snapshot.empty) {
           const docData = snapshot.docs[0].data();
 
-          // TAMBAHAN: Ambil link download dari data transaksi jika tersedia
           if (docData.download_link) {
             setDownloadUrl(docData.download_link);
           }
@@ -78,25 +87,39 @@ function PaymentContent() {
             const selisihJam =
               (sekarang.getTime() - timeConfirmed.getTime()) / (1000 * 60 * 60);
             if (selisihJam < 3) {
-              setIsSuccess(true);
+              setIsApproved(true);
+              setIsRejected(false);
             } else {
-              setIsSuccess(false);
+              setIsApproved(false);
             }
           }
+        } else {
+          setIsApproved(false);
         }
       });
-      return () => unsubscribe();
+
+      // --- Listener: REJECTED ---
+      const qRejected = query(
+        collection(db, "transactions"),
+        where("email_pembeli", "==", userEmail),
+        where("status", "==", "rejected"),
+      );
+
+      const unsubscribeRejected = onSnapshot(qRejected, (snapshot) => {
+        if (!snapshot.empty) {
+          setIsRejected(true);
+          setIsApproved(false);
+        } else {
+          setIsRejected(false);
+        }
+      });
+
+      return () => {
+        unsubscribeApproved();
+        unsubscribeRejected();
+      };
     }
   }, [searchParams]);
-
-  const convertToBase64 = (file: File): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const fileReader = new FileReader();
-      fileReader.readAsDataURL(file);
-      fileReader.onload = () => resolve(fileReader.result as string);
-      fileReader.onerror = (error) => reject(error);
-    });
-  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -144,7 +167,47 @@ function PaymentContent() {
   };
 
   const handleKonfirmasi = async () => {
-    if (!buktiPembayaran) return;
+    // STEP 1A: Validasi product_id dari URL params
+    const productIdParam = searchParams.get("id");
+    if (!productIdParam) {
+      Swal.fire({
+        title: "Produk Tidak Ditemukan!",
+        text: "Kembali ke halaman produk dan coba lagi.",
+        icon: "error",
+        confirmButtonColor: "#ffd700",
+        background: "#1e293b",
+        color: "#fff",
+      });
+      return;
+    }
+
+    // STEP 1B: Validasi file ada
+    if (!buktiPembayaran) {
+      Swal.fire({
+        title: "Bukti Pembayaran Belum Dipilih!",
+        text: "Silakan upload bukti pembayaran terlebih dahulu.",
+        icon: "warning",
+        confirmButtonColor: "#ffd700",
+        background: "#1e293b",
+        color: "#fff",
+      });
+      return;
+    }
+
+    // STEP 1C: Validasi tipe file (hanya PNG & JPEG)
+    const allowedTypes = ["image/png", "image/jpeg"];
+    if (!allowedTypes.includes(buktiPembayaran.type)) {
+      Swal.fire({
+        title: "Format File Tidak Didukung!",
+        text: "Hanya file PNG dan JPG/JPEG yang diperbolehkan.",
+        icon: "error",
+        confirmButtonColor: "#ffd700",
+        background: "#1e293b",
+        color: "#fff",
+      });
+      return;
+    }
+
     setIsUploading(true);
     Swal.fire({
       title: "Mengirim...",
@@ -156,31 +219,56 @@ function PaymentContent() {
     });
 
     try {
-      const base64Image = await convertToBase64(buktiPembayaran);
+      const supabase = createSupabaseBrowser();
 
-      // 1. Simpan ke Firebase
-      const docRef = await addDoc(collection(db, "transactions"), {
-        nama_pembeli: localStorage.getItem("userName") || "Pembeli",
-        email_pembeli: localStorage.getItem("userEmail") || "pembeli@gmail.com",
-        nama_produk: searchParams.get("nama") || "Aset Nusantara",
-        total_harga: totalTagihan,
-        metode_bayar: metode,
-        bukti_transfer: base64Image,
-        status: "pending",
-        createdAt: serverTimestamp(),
-        verifiedAt: null,
-        // TAMBAHAN: Menyimpan info asset_id agar admin tahu file mana yang harus dikirim
-        asset_id: searchParams.get("id") || "N/A",
+      // STEP 2: Generate Transaction ID
+      const transactionId = generateTransactionId();
+
+      // STEP 3: Tentukan ekstensi file dari file.type
+      const extMap: Record<string, string> = {
+        "image/png": ".png",
+        "image/jpeg": ".jpg",
+      };
+      const ext = extMap[buktiPembayaran.type];
+      const filePath = `bukti-bayar/${transactionId}${ext}`;
+
+      // STEP 4: Upload file asli ke Supabase Storage (bucket: pembayaran)
+      const { error: uploadError } = await supabase.storage
+        .from("pembayaran")
+        .upload(filePath, buktiPembayaran, {
+          cacheControl: "3600",
+          upsert: false,
+        });
+
+      if (uploadError) throw uploadError;
+
+      // STEP 5: Insert ke table orders
+      // ✅ Status di-set "pending" — TIDAK bisa diubah user karena RLS Supabase
+      // hanya admin (service role) yang bisa UPDATE status
+      const customerId =
+        localStorage.getItem("userId") ||
+        localStorage.getItem("userUid") ||
+        "";
+
+      const { error: dbError } = await supabase.from("orders").insert({
+        customer_id: customerId,
+        product_id: parseInt(productIdParam),
+        metode_pembayaran: metode,
+        bukti_transfer_url: filePath,
+        status: "pending", // ✅ Diubah dari "waiting_verification" → "pending"
       });
 
-      // 2. KIRIM NOTIFIKASI EMAILJS KE ADMIN
+      if (dbError) throw dbError;
+
+      // Kirim notifikasi EmailJS ke admin
       const emailParams = {
         from_name: localStorage.getItem("userName") || "Pembeli",
-        user_email: localStorage.getItem("userEmail") || "Tidak ada email",
+        user_email:
+          localStorage.getItem("userEmail") || "Tidak ada email",
         product_name: searchParams.get("nama") || "Aset Nusantara",
         total_price: totalTagihan.toLocaleString("id-ID"),
         payment_method: metode.toUpperCase(),
-        order_id: docRef.id,
+        order_id: transactionId,
       };
 
       await emailjs.send(
@@ -198,9 +286,16 @@ function PaymentContent() {
         background: "#1e293b",
         color: "#fff",
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error(error);
-      Swal.fire("Error", "Gagal mengirim data", "error");
+      Swal.fire({
+        title: "Error!",
+        text: error?.message || "Gagal mengirim data, coba lagi.",
+        icon: "error",
+        confirmButtonColor: "#ffd700",
+        background: "#1e293b",
+        color: "#fff",
+      });
     } finally {
       setIsUploading(false);
     }
@@ -214,7 +309,8 @@ function PaymentContent() {
     { id: "ovo", logo: "/img/logo-ovo.png" },
   ];
 
-  if (isSuccess) {
+  // ✅ UI: Pembayaran APPROVED
+  if (isApproved) {
     return (
       <main className="payment-page">
         <Navbar />
@@ -246,7 +342,6 @@ function PaymentContent() {
               </p>
             </div>
 
-            {/* MODIFIKASI: Tombol download sekarang dinamis */}
             <button
               className="btn-confirm"
               style={{ marginTop: "30px" }}
@@ -304,6 +399,118 @@ function PaymentContent() {
     );
   }
 
+  // ✅ UI: Pembayaran REJECTED
+  if (isRejected) {
+    return (
+      <main className="payment-page">
+        <Navbar />
+        <div className="payment-container">
+          <div className="payment-box">
+            <div style={{ fontSize: "60px", marginBottom: "20px" }}>❌</div>
+            <h2 className="payment-title">
+              Pembayaran <span style={{ color: "#f87171" }}>Ditolak</span>
+            </h2>
+            <p className="payment-sub">
+              Maaf, bukti pembayaran kamu tidak dapat diverifikasi oleh admin.
+            </p>
+            <div
+              style={{
+                background: "rgba(248, 113, 113, 0.1)",
+                padding: "15px",
+                borderRadius: "15px",
+                marginTop: "20px",
+                border: "1px dashed #f87171",
+              }}
+            >
+              <p
+                style={{
+                  fontSize: "12px",
+                  color: "#f87171",
+                  lineHeight: "1.6",
+                }}
+              >
+                Kemungkinan bukti tidak valid atau nominal tidak sesuai.
+                Silakan hubungi admin atau coba lagi dengan bukti yang benar.
+              </p>
+            </div>
+
+            <button
+              className="btn-confirm"
+              style={{
+                marginTop: "30px",
+                background: "#f87171",
+                color: "#fff",
+              }}
+              onClick={() => window.location.reload()}
+            >
+              COBA LAGI
+            </button>
+
+            <button
+              style={{
+                marginTop: "12px",
+                background: "transparent",
+                border: "1px solid rgba(255,255,255,0.15)",
+                color: "#94a3b8",
+                width: "100%",
+                padding: "14px",
+                borderRadius: "50px",
+                fontWeight: "600",
+                cursor: "pointer",
+                fontSize: "13px",
+              }}
+              onClick={() =>
+                window.open("https://wa.me/6282137534026", "_blank")
+              }
+            >
+              HUBUNGI ADMIN
+            </button>
+          </div>
+        </div>
+        <style jsx>{`
+          .payment-page {
+            background: #0f172a;
+            min-height: 100vh;
+            color: white;
+          }
+          .payment-container {
+            padding: 120px 5% 40px;
+            display: flex;
+            justify-content: center;
+          }
+          .payment-box {
+            background: #1e293b;
+            padding: 40px;
+            border-radius: 30px;
+            max-width: 480px;
+            width: 100%;
+            text-align: center;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+          }
+          .payment-title span {
+            color: #ffd700;
+          }
+          .payment-sub {
+            color: #94a3b8;
+            font-size: 14px;
+            margin-top: 8px;
+          }
+          .btn-confirm {
+            background: #ffd700;
+            color: #000;
+            border: none;
+            width: 100%;
+            padding: 18px;
+            border-radius: 50px;
+            font-weight: 800;
+            cursor: pointer;
+          }
+        `}</style>
+      </main>
+    );
+  }
+
+  // ✅ UI: Form Pembayaran (default)
   return (
     <main className="payment-page">
       <Navbar />
@@ -410,6 +617,11 @@ function PaymentContent() {
           margin: 10px 0 30px;
           font-weight: 800;
         }
+        .payment-sub {
+          color: #94a3b8;
+          font-size: 14px;
+          margin-top: 8px;
+        }
         .method-grid {
           display: flex;
           flex-direction: column;
@@ -458,6 +670,11 @@ function PaymentContent() {
           background: rgba(255, 255, 255, 0.02);
           border-radius: 20px;
           border: 1px dashed rgba(255, 215, 0, 0.3);
+        }
+        .upload-label {
+          font-size: 13px;
+          color: #94a3b8;
+          margin-bottom: 12px;
         }
         .custom-upload-btn {
           display: inline-block;

@@ -4,12 +4,12 @@ import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyBPbi9O2i0d8YHj4i0or8eiCU0HWw2sdHk",
-  authDomain: "nusantaraassets-5.firebaseapp.com",
-  projectId: "nusantaraassets-5",
-  storageBucket: "nusantaraassets-5.firebasestorage.app",
-  messagingSenderId: "952451313501",
-  appId: "1:952451313501:web:bc7c7f8ae3fb6e1a0e82b4",
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
 // Pastikan kodenya seperti ini agar tidak bentrok pas refresh

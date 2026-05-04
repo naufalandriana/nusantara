@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import Navbar from "../components/Navbar"; // Menyesuaikan path Navbar
-import { supabase } from "../lib/supabase";
+import Navbar from "../components/Navbar";
+import { createSupabaseBrowser } from "@/app/lib/supabase/client";
 
 export default function Katalog() {
   const [user, setUser] = useState<{ name: string; pic: string } | null>(null);
@@ -109,6 +109,7 @@ export default function Katalog() {
     const fetchProducts = async () => {
       try {
         setLoading(true);
+        const supabase = createSupabaseBrowser();
         const { data, error } = await supabase.from("product").select("*");
 
         if (error) throw error;
@@ -245,7 +246,6 @@ export default function Katalog() {
                   {item.provinsi || item.prov}
                 </span>
                 <img
-                  /* MODIFIKASI: Menambahkan image_preview dan imageRendering pixelated */
                   src={
                     item.image_preview ||
                     item.gambar_url ||
@@ -332,7 +332,8 @@ export default function Katalog() {
                     fontWeight: "600",
                   }}
                   onClick={() => {
-                    const url = `/detail-produk?nama=${encodeURIComponent(item.nama)}&harga=${encodeURIComponent(item.harga || "70k")}&desc=${encodeURIComponent(item.deskripsi || item.desc)}`;
+                    // ✅ FIX: item.id sekarang ikut dikirim ke detail-produk
+                    const url = `/detail-produk?id=${encodeURIComponent(item.id)}&nama=${encodeURIComponent(item.nama)}&harga=${encodeURIComponent(item.harga || "70k")}&desc=${encodeURIComponent(item.deskripsi || item.desc || "")}`;
                     window.location.href = url;
                   }}
                 >
